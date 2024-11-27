@@ -101,6 +101,85 @@ data['strategy_return'] = np.where(data['signal'] == 'Buy', data['return'],
 data['cumulative_strategy_return'] = (1 + data['strategy_return']).cumprod()
 data['cumulative_btc_return'] = (1 + data['return']).cumprod()
 
+
+# Generate trade log
+def create_trade_log(data):
+    # Create a DataFrame for trades
+    trades = data[data['signal'] != 'Hold'].copy()
+    trades['price'] = trades['Adj Close']
+    trades['timestamp'] = trades.index
+    trades['prev_price'] = trades['price'].shift(1)
+    trades['price_change'] = trades['price'] - trades['prev_price']
+    trades['price_change_pct'] = trades['return']
+    trades['cumulative_return'] = trades['cumulative_strategy_return']
+    
+    # Calculate trade-specific metrics
+    trade_log = pd.DataFrame({
+        'timestamp': trades.index,
+        'action': trades['signal'],
+        'price': trades['price'],
+        'state': trades['state'],
+        'prev_state': trades['prev_state'],
+        'price_change': trades['price_change'],
+        'price_change_pct': trades['price_change_pct'],
+        'cumulative_return': trades['cumulative_return']
+    })
+    
+    return trade_log
+
+# Calculate performance metrics
+def calculate_max_drawdown(returns):
+    cumulative = (1 + returns).cumprod()
+    rolling_max = cumulative.expanding().max()
+    drawdowns = cumulative / rolling_max - 1
+    return drawdowns.min()
+
+def calculate_minute_sharpe_ratio(returns, risk_free_rate=0):
+    excess_returns = returns - risk_free_rate
+    return np.sqrt(525600) * (excess_returns.mean() / excess_returns.std())
+
+# Generate summary statistics
+def create_summary_statistics(data):
+    summary = {
+        'analysis_period': f"{data.index[0]} to {data.index[-1]}",
+        'total_trades': len(data[data['signal'] != 'Hold']),
+        'buy_signals': len(data[data['signal'] == 'Buy']),
+        'sell_signals': len(data[data['signal'] == 'Sell']),
+        'final_strategy_return': (data['cumulative_strategy_return'].iloc[-1] - 1) * 100,
+        'final_btc_return': (data['cumulative_btc_return'].iloc[-1] - 1) * 100,
+        'max_drawdown': calculate_max_drawdown(data['strategy_return']) * 100,
+        'sharpe_ratio': calculate_minute_sharpe_ratio(data['strategy_return']),
+        'state_distribution': data['state'].value_counts().to_dict()
+    }
+    return summary
+
+# Generate trade log and summary
+trade_log = create_trade_log(data)
+summary_stats = create_summary_statistics(data)
+
+# Save trade log to CSV
+trade_log.to_csv('trade_log.csv', index=True)
+
+# Save summary statistics to text file
+with open('trading_summary.txt', 'w') as f:
+    f.write("Bitcoin Trading Analysis Summary\n")
+    f.write("=" * 30 + "\n\n")
+    f.write(f"Analysis Period: {summary_stats['analysis_period']}\n")
+    f.write(f"Total Number of Trades: {summary_stats['total_trades']}\n")
+    f.write(f"Buy Signals: {summary_stats['buy_signals']}\n")
+    f.write(f"Sell Signals: {summary_stats['sell_signals']}\n")
+    f.write(f"Strategy Return: {summary_stats['final_strategy_return']:.2f}%\n")
+    f.write(f"Bitcoin Buy & Hold Return: {summary_stats['final_btc_return']:.2f}%\n")
+    f.write(f"Maximum Drawdown: {summary_stats['max_drawdown']:.2f}%\n")
+    f.write(f"Sharpe Ratio: {summary_stats['sharpe_ratio']:.2f}\n\n")
+    f.write("State Distribution:\n")
+    for state, count in summary_stats['state_distribution'].items():
+        f.write(f"{state}: {count}\n")
+
+# Save full dataset
+data.to_csv('full_trading_data.csv', index=True)
+
+
 # Calculate state distribution
 state_distribution = data['state'].value_counts() / len(data)
 print("\nState Distribution:")
@@ -176,12 +255,22 @@ transitions = data.groupby(['prev_state', 'state']).size().reset_index()
 transitions.columns = ['source', 'target', 'value']
 transitions['value'] = transitions['value'] / len(data)
 
-# Plot Sankey diagram for top transitions
-plt.figure(figsize=(15, 10))
-sankey = Sankey(ax=plt.gca(), scale=0.01, offset=0.1)
-sankey.add(flows=transitions['value'][:10],
-           labels=transitions['source'][:10],
-           orientations=[0]*10)
-plt.title("Top State Transitions Flow")
-plt.axis('off')
+print(data)
+
+# Create visualization of trades
+plt.figure(figsize=(15, 7))
+plt.plot(data.index, data['Adj Close'], label='Bitcoin Price', color='gray', alpha=0.5)
+plt.scatter(trade_log[trade_log['action'] == 'Buy'].index, 
+           trade_log[trade_log['action'] == 'Buy']['price'],
+           color='green', marker='^', label='Buy Signal')
+plt.scatter(trade_log[trade_log['action'] == 'Sell'].index,
+           trade_log[trade_log['action'] == 'Sell']['price'],
+           color='red', marker='v', label='Sell Signal')
+plt.title('Bitcoin Price with Trading Signals')
+plt.xlabel('Date')
+plt.ylabel('Price')
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.savefig('trading_signals_visualization.png')
 plt.show()

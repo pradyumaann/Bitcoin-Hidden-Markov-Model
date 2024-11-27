@@ -1,0 +1,20 @@
+Bitcoin Trading Analysis Summary
+==============================
+
+Analysis Period: 2024-11-20 00:39:00+00:00 to 2024-11-27 00:31:00+00:00
+Total Number of Trades: 512
+Buy Signals: 267
+Sell Signals: 245
+Strategy Return: 46.50%
+Bitcoin Buy & Hold Return: -0.11%
+Maximum Drawdown: -0.57%
+Sharpe Ratio: 126.87
+
+State Distribution:
+slight_down: 2948
+slight_up: 2934
+moderate_down: 545
+moderate_up: 543
+neutral: 14
+strong_down: 3
+strong_up: 2
